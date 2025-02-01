@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Display Key Value</title>
+    <script>
+        function getQueryParameter(param) {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get(param) || 'No value provided';
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(function() {
+                alert('Copied to clipboard: ' + text);
+            }, function(err) {
+                console.error('Could not copy text: ', err);
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const keyValue = getQueryParameter('key');
+            document.getElementById('value').innerText = keyValue;
+            document.getElementById('copy-button').addEventListener('click', function() {
+                copyToClipboard(keyValue);
+            });
+        });
+    </script>
+</head>
+<body>
+    <h1>Value: <span id="value"></span></h1>
+    <button id="copy-button">Copy</button>
+</body>
+</html>
