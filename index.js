@@ -71,7 +71,7 @@ function startFarming() {
 
       await bot.waitForTicks(20); 
 
-      const blockAbove = bot.blockAt(bot.entity.position.offset(0, 0, 0));
+      const blockAbove = bot.blockAt(bot.entity.position.offset(0, 1, 0));
       if (blockAbove && blockAbove.name === blockName) {
         await bot.dig(blockAbove);
         console.log('Đã đập block.');
