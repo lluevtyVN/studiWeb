@@ -60,18 +60,18 @@ function startFarming() {
 
       await bot.equip(item, 'hand');
 
-      const referenceBlock = bot.blockAt(bot.entity.position.offset(0, -1, 0));
+      const referenceBlock = bot.blockAt(bot.entity.position.offset(0, -1, 1));
       if (!referenceBlock) {
         console.log('Không có block dưới chân để tham chiếu.');
         return;
       }
 
-      await bot.placeBlock(referenceBlock, new Vec3(0, 1, 0));
+      await bot.placeBlock(referenceBlock, new Vec3(0, 1, 1));
       console.log('Đã đặt block.');
 
       await bot.waitForTicks(20); 
 
-      const blockAbove = bot.blockAt(bot.entity.position.offset(0, 1, 0));
+      const blockAbove = bot.blockAt(bot.entity.position.offset(0, 1, 1));
       if (blockAbove && blockAbove.name === blockName) {
         await bot.dig(blockAbove);
         console.log('Đã đập block.');
