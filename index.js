@@ -69,7 +69,7 @@ function startFarming() {
       await bot.placeBlock(referenceBlock, new Vec3(0, 1, 1));
       console.log('Đã đặt block.');
 
-      await bot.waitForTicks(20); 
+      await bot.waitForTicks(40); 
 
       const blockAbove = bot.blockAt(bot.entity.position.offset(0, 1, 1));
       if (blockAbove && blockAbove.name === blockName) {
