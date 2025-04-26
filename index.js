@@ -73,7 +73,7 @@ async function startFarming() {
       console.log('Đã đặt block.');
 
       // Đợi để block được đặt, sau đó đập
-      const placedBlock = bot.blockAt(bot.entity.position.offset(0, 1, 1));
+      const placedBlock = bot.blockAt(referenceBlock.position.plus(new Vec(0, 1, 1)));
       if (placedBlock && placedBlock.name === BLOCK_NAME) {
         await bot.dig(placedBlock);
         console.log('Đã đập block.');
