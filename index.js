@@ -65,7 +65,11 @@ async function startFarming() {
       }
 
       // Đặt block tại vị trí đã xác định
-      await bot.placeBlock(referenceBlock, new Vec3(0, 1, 1));
+      try{
+        await bot.placeBlock(referenceBlock, new Vec3(0, 1, 1));
+      } catch (err){
+        
+      }
       console.log('Đã đặt block.');
 
       // Đợi để block được đặt, sau đó đập
