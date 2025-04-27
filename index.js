@@ -136,7 +136,17 @@ function setupBotEvents() {
 
   // Kiểm tra thời gian để tự ngủ khi trời tối
   bot.on("time", async () => {
-    if (isTryingToSleep || farming || !bot.world || bot.world.time.worldTime < 13000 || bot.world.time.worldTime >= 23000) return;
+    // Kiểm tra bot.world và bot.world.time trước khi truy cập worldTime
+    if (
+      isTryingToSleep ||
+      farming ||
+      !bot.world ||
+      !bot.world.time ||
+      bot.world.time.worldTime < 13000 ||
+      bot.world.time.worldTime >= 23000
+    ) {
+      return;
+    }
 
     isTryingToSleep = true;
     stopWandering(); // Dừng wandering để tìm giường
@@ -219,22 +229,22 @@ async function startFarming() {
       let placed = false;
       for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
         try {
-          await bot.placeBlock(referenceBlock, new Vec3(0, 1, 0));
-          console.log(`Đã đặt block ${BLOCK_NAME} (thử ${attempt}).`);
-          placed = true;
-          break;
+        await bot.placeBlock(referenceBlock, new Vec3(0, 1, 0));
+        console.log(`Đã đặt block ${BLOCK_NAME} (thử ${attempt}).`);
+        placed = true;
+        break;
         } catch (err) {
-          console.error(`Thử ${attempt} thất bại: ${err.message}`);
-          if (attempt === MAX_RETRIES) {
+        console.error(`Thử ${attempt} thất bại: ${err.message}`);
+        if (attempt === MAX_RETRIES) {
             console.log("Hết số lần thử, xoay bot để thử hướng mới.");
             await rotateBot(); // Xoay bot nếu hết số lần thử
             return;
-          }
-          await new Promise((resolve) => setTimeout(resolve, 1000)); // Chờ trước khi thử lại
         }
-      }
+        await new Promise((resolve) => setTimeout(resolve, 1000)); // Chờ trước khi thử lại
+        }
+    }
 
-      if (!placed) return;
+    if (!placed) return;
 
       // Chờ và kiểm tra block vừa đặt
       await new Promise((resolve) => setTimeout(resolve, 1500)); // Tăng thời gian chờ server
@@ -266,44 +276,7 @@ function stopFarming() {
 
 // Hàm bắt đầu di chuyển và nhảy vòng vòng
 function startWandering() {
-  if (wandering || farming || isTryingToSleep) return; // Không chạy nếu đang wandering, farming, hoặc tìm giường
-  wandering = true;
-
-  const startPos = bot.entity.position.clone(); // Lưu vị trí ban đầu
-
-  wanderingInterval = setInterval(async () => {
-    if (!wandering || farming || isDigging || isTryingToSleep) return; // Bỏ qua nếu đang đào, farming, tìm giường, hoặc không wandering
-
-    try {
-      // Chọn hướng di chuyển ngẫu nhiên
-      const directions = [
-        new Vec3(1, 0, 0), // Phải
-        new Vec3(-1, 0, 0), // Trái
-        new Vec3(0, 0, 1), // Tiến
-        new Vec3(0, 0, -1), // Lùi
-      ];
-      const direction = directions[Math.floor(Math.random() * directions.length)];
-
-      // Tính vị trí mới
-      const newPos = bot.entity.position.plus(direction);
-      const distance = newPos.distanceTo(startPos);
-
-      // Kiểm tra giới hạn phạm vi 4 block
-      if (distance > WANDER_RANGE) {
-        console.log("Đạt giới hạn phạm vi, xoay bot.");
-        await rotateBot(); // Xoay bot nếu vượt phạm vi
-        return;
-      }
-
-      // Kiểm tra block dưới chân tại vị trí mới (phải là block rắn)
-      const blockBelow = bot.blockAt(newPos.offset(0, -1, 0));
-      if (!blockBelow || blockBelow.name === "air" || !blockBelow.boundingBox) {
-        console.log("Không phải mặt phẳng, xoay bot.");
-        await rotateBot(); // Xoay bot nếu không phải mặt phẳng
-        return;
-      }
-
-      // Kiểm tra block phía trên (phải là air để di chuyển)
+  if (wandering || farming || isTryingToSleep) return; // Không chạy nếu đang wandering, farming, hoặc tìm giường	// Kiểm tra block phía trên (phải là air để di chuyển)
       const blockAtNewPos = bot.blockAt(newPos);
       const blockAbove = bot.blockAt(newPos.offset(0, 1, 0));
       if (blockAtNewPos.name !== "air" || blockAbove.name !== "air") {
