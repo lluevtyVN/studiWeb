@@ -1,5 +1,6 @@
 const mineflayer = require("mineflayer");
 const { Vec3 } = require("vec3");
+const n = require("./new.js"); // Giữ dòng này, đảm bảo new.js tồn tại
 
 const bot = mineflayer.createBot({
   host: "lluevtyB.aternos.me",
@@ -14,12 +15,52 @@ let farmingInterval = null;
 let wandering = false;
 let wanderingInterval = null;
 let isDigging = false; // Biến để theo dõi trạng thái đào
+let isTryingToSleep = false; // Biến để theo dõi trạng thái tìm giường
 const BLOCK_NAME = "dirt"; // Block cần đặt và đập
-const PLACE_INTERVAL = 4000; // Tăng thời gian giữa các lần đặt/đập để giảm tải server (ms)
-const WANDER_RANGE = 4; // Phạm vi di chuyển (block)
+const PLACE_INTERVAL = 4000; // Thời gian giữa các lần đặt/đập (ms)
+const WANDER_RANGE = 4; // Phạm vi di chuyển wandering (block)
 const JUMP_INTERVAL_MIN = 3000; // Thời gian tối thiểu giữa các lần nhảy (ms)
 const JUMP_INTERVAL_MAX = 5000; // Thời gian tối đa giữa các lần nhảy (ms)
 const MAX_RETRIES = 2; // Số lần thử lại khi đặt block thất bại
+const SLEEP_RANGE = 3; // Phạm vi tìm giường (±3 block, tương đương 6x6)
+
+// Hàm di chuyển đến vị trí với phá block cỏ/đất cản đường
+async function moveToPosition(targetPos) {
+  try {
+    const currentPos = bot.entity.position.floored();
+    const path = [currentPos, targetPos]; // Đơn giản hóa: di chuyển thẳng
+    for (const pos of path.slice(1)) {
+      const blockAtPos = bot.blockAt(pos);
+      const blockAbove = bot.blockAt(pos.offset(0, 1, 0));
+
+      // Phá block cỏ hoặc đất cản đường
+      for (const block of [blockAtPos, blockAbove]) {
+        if (block && (block.name === "grass" || block.name === "dirt")) {
+          console.log(`Phá block ${block.name} tại ${block.position}`);
+          isDigging = true;
+          await bot.dig(block);
+          isDigging = false;
+        }
+      }
+
+      // Kiểm tra lại sau khi phá
+      if (bot.blockAt(pos).name !== "air" || bot.blockAt(pos.offset(0, 1, 0)).name !== "air") {
+        console.log("Đường vẫn bị chặn sau khi phá, dừng di chuyển.");
+        return false;
+      }
+
+      // Di chuyển đến vị trí
+      bot.setControlState("forward", true);
+      await bot.lookAt(pos.offset(0, 1.6, 0));
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      bot.setControlState("forward", false);
+    }
+    return true;
+  } catch (err) {
+    console.error("Lỗi khi di chuyển:", err.message);
+    return false;
+  }
+}
 
 bot.once("spawn", () => {
   console.log("Bot đã vào server!");
@@ -63,7 +104,33 @@ bot.once("spawn", () => {
   bot.on("diggingAborted", () => {
     isDigging = false;
   });
+
+  // Kiểm tra thời gian để tự ngủ khi trời tối
+  bot.on("time", async () => {
+    if (isTryingToSleep || farming || !bot.world || bot.world.time.worldTime < 13000 || bot.world.time.worldTime >= 23000) return;
+
+    isTryingToSleep = true;
+    stopWandering(); // Dừng wandering để tìm giường
+    stopFarming(); // Dừng farming để tìm giường
+    console.log("Trời tối, bot đang tìm giường để ngủ...");
+    await trySleep();
+    isTryingToSleep = false;
+    startWandering(); // Tiếp tục wandering sau khi thử ngủ
+  });
 });
+
+// Hàm xoay bot 90 độ (ngẫu nhiên trái/phải)
+async function rotateBot() {
+  try {
+    const currentYaw = bot.entity.yaw;
+    const turnDirection = Math.random() < 0.5 ? 1 : -1; // Ngẫu nhiên trái/phải
+    const newYaw = currentYaw + (Math.PI / 2) * turnDirection; // Xoay 90 độ
+    await bot.look(newYaw, bot.entity.pitch);
+    console.log("Bot đã xoay 90 độ để thử hướng mới.");
+  } catch (err) {
+    console.error("Lỗi khi xoay bot:", err.message);
+  }
+}
 
 // Hàm bắt đầu đặt và đập block liên tục
 async function startFarming() {
@@ -84,9 +151,11 @@ async function startFarming() {
       await bot.equip(item, "hand");
 
       // Tìm block tham chiếu (dưới chân bot, phía trước 1 block)
-      const referenceBlock = bot.blockAt(bot.entity.position.offset(0, -1, 1));
+      const offset = new Vec3(0, -1, 1); // Hướng phía trước
+      const referenceBlock = bot.blockAt(bot.entity.position.offset(offset.x, offset.y, offset.z));
       if (!referenceBlock || referenceBlock.name === "air" || !referenceBlock.boundingBox) {
         console.log("Block tham chiếu không hợp lệ (air hoặc không rắn).");
+        await rotateBot(); // Xoay bot nếu block tham chiếu không hợp lệ
         return;
       }
 
@@ -94,7 +163,8 @@ async function startFarming() {
       const placePos = referenceBlock.position.plus(new Vec3(0, 1, 0));
       const blockAtPlacePos = bot.blockAt(placePos);
       if (blockAtPlacePos && blockAtPlacePos.name !== "air") {
-        console.log("Vị trí đặt block đã có block khác.");
+        console.log("Vị trí đặt block bị chặn bởi block khác.");
+        await rotateBot(); // Xoay bot nếu vị trí bị chặn
         return;
       }
 
@@ -109,7 +179,8 @@ async function startFarming() {
         } catch (err) {
           console.error(`Thử ${attempt} thất bại: ${err.message}`);
           if (attempt === MAX_RETRIES) {
-            console.log("Hết số lần thử, bỏ qua đặt block.");
+            console.log("Hết số lần thử, xoay bot để thử hướng mới.");
+            await rotateBot(); // Xoay bot nếu hết số lần thử
             return;
           }
           await new Promise((resolve) => setTimeout(resolve, 1000)); // Chờ trước khi thử lại
@@ -119,7 +190,7 @@ async function startFarming() {
       if (!placed) return;
 
       // Chờ và kiểm tra block vừa đặt
-      await new Promise((resolve) => setTimeout(resolve, 1000)); // Tăng thời gian chờ server
+      await new Promise((resolve) => setTimeout(resolve, 1500)); // Tăng thời gian chờ server
       const placedBlock = bot.blockAt(placePos);
 
       if (placedBlock && placedBlock.name === BLOCK_NAME) {
@@ -128,9 +199,11 @@ async function startFarming() {
         console.log(`Đã đập block ${BLOCK_NAME}.`);
       } else {
         console.log("Không tìm thấy block vừa đặt để đập.");
+        await rotateBot(); // Xoay bot nếu không tìm thấy block
       }
     } catch (err) {
       console.error("Lỗi trong quá trình đặt/đập:", err.message);
+      await rotateBot(); // Xoay bot nếu gặp lỗi
     }
   }, PLACE_INTERVAL);
 }
@@ -146,13 +219,13 @@ function stopFarming() {
 
 // Hàm bắt đầu di chuyển và nhảy vòng vòng
 function startWandering() {
-  if (wandering || farming) return; // Không chạy nếu đang wandering hoặc farming
+  if (wandering || farming || isTryingToSleep) return; // Không chạy nếu đang wandering, farming, hoặc tìm giường
   wandering = true;
 
   const startPos = bot.entity.position.clone(); // Lưu vị trí ban đầu
 
   wanderingInterval = setInterval(async () => {
-    if (!wandering || farming || isDigging) return; // Bỏ qua nếu đang đào, farming hoặc không wandering
+    if (!wandering || farming || isDigging || isTryingToSleep) return; // Bỏ qua nếu đang đào, farming, tìm giường, hoặc không wandering
 
     try {
       // Chọn hướng di chuyển ngẫu nhiên
@@ -170,14 +243,16 @@ function startWandering() {
 
       // Kiểm tra giới hạn phạm vi 4 block
       if (distance > WANDER_RANGE) {
-        console.log("Đạt giới hạn phạm vi, bỏ qua di chuyển.");
+        console.log("Đạt giới hạn phạm vi, xoay bot.");
+        await rotateBot(); // Xoay bot nếu vượt phạm vi
         return;
       }
 
       // Kiểm tra block dưới chân tại vị trí mới (phải là block rắn)
       const blockBelow = bot.blockAt(newPos.offset(0, -1, 0));
       if (!blockBelow || blockBelow.name === "air" || !blockBelow.boundingBox) {
-        console.log("Không phải mặt phẳng, bỏ qua di chuyển.");
+        console.log("Không phải mặt phẳng, xoay bot.");
+        await rotateBot(); // Xoay bot nếu không phải mặt phẳng
         return;
       }
 
@@ -185,7 +260,8 @@ function startWandering() {
       const blockAtNewPos = bot.blockAt(newPos);
       const blockAbove = bot.blockAt(newPos.offset(0, 1, 0));
       if (blockAtNewPos.name !== "air" || blockAbove.name !== "air") {
-        console.log("Đường bị chặn, bỏ qua di chuyển.");
+        console.log("Đường bị chặn, xoay bot.");
+        await rotateBot(); // Xoay bot nếu đường bị chặn
         return;
       }
 
@@ -204,6 +280,7 @@ function startWandering() {
       }
     } catch (err) {
       console.error("Lỗi khi wandering:", err.message);
+      await rotateBot(); // Xoay bot nếu gặp lỗi
     }
   }, Math.floor(Math.random() * (JUMP_INTERVAL_MAX - JUMP_INTERVAL_MIN) + JUMP_INTERVAL_MIN));
 }
@@ -219,19 +296,29 @@ function stopWandering() {
   bot.setControlState("jump", false);
 }
 
-// Hàm tìm giường và ngủ/set spawn
+// Hàm tìm giường và ngủ
 async function trySleep() {
   try {
+    // Tìm giường trong phạm vi 6x6 (±3 block)
     const bed = bot.findBlock({
       matching: (block) => block.name.includes("bed"),
-      maxDistance: 4,
+      maxDistance: SLEEP_RANGE,
     });
 
     if (!bed) {
-      bot.chat("Không tìm thấy giường trong phạm vi 4 block!");
+      bot.chat("Không tìm thấy giường trong phạm vi 6x6!");
       return;
     }
 
+    // Di chuyển đến giường
+    const bedPos = bed.position.floored();
+    const moved = await moveToPosition(bedPos);
+    if (!moved) {
+      bot.chat("Không thể di chuyển đến giường!");
+      return;
+    }
+
+    // Thử ngủ
     try {
       await bot.sleep(bed);
       bot.chat("Đã ngủ thành công!");
