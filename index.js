@@ -13,6 +13,7 @@ let farming = false;
 let farmingInterval = null;
 let wandering = false;
 let wanderingInterval = null;
+let isDigging = false; // Biến để theo dõi trạng thái đào
 const BLOCK_NAME = "dirt"; // Block cần đặt và đập
 const PLACE_INTERVAL = 3000; // Thời gian giữa các lần đặt/đập (ms)
 const WANDER_RANGE = 4; // Phạm vi di chuyển (block)
@@ -50,12 +51,23 @@ bot.once("spawn", () => {
       startWandering(); // Tiếp tục wandering sau khi ngủ
     }
   });
+
+  // Theo dõi trạng thái đào
+  bot.on("diggingStarted", () => {
+    isDigging = true;
+  });
+  bot.on("diggingCompleted", () => {
+    isDigging = false;
+  });
+  bot.on("diggingAborted", () => {
+    isDigging = false;
+  });
 });
 
 // Hàm bắt đầu đặt và đập block liên tục
 async function startFarming() {
   farmingInterval = setInterval(async () => {
-    if (!farming || bot.isDigging()) return; // Bỏ qua nếu đang đào hoặc không hoạt động
+    if (!farming || isDigging) return; // Bỏ qua nếu đang đào hoặc không hoạt động
 
     try {
       // Tìm item trong inventory
@@ -87,6 +99,7 @@ async function startFarming() {
       const placedBlock = bot.blockAt(placedBlockPos);
 
       if (placedBlock && placedBlock.name === BLOCK_NAME) {
+        isDigging = true; // Đánh dấu trạng thái đào
         await bot.dig(placedBlock);
         console.log(`Đã đập block ${BLOCK_NAME}.`);
       } else {
@@ -115,7 +128,7 @@ function startWandering() {
   const startPos = bot.entity.position.clone(); // Lưu vị trí ban đầu
 
   wanderingInterval = setInterval(async () => {
-    if (!wandering || farming || bot.isDigging()) return;
+    if (!wandering || farming || isDigging) return; // Bỏ qua nếu đang đào, farming hoặc không wandering
 
     try {
       // Chọn hướng di chuyển ngẫu nhiên
