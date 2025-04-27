@@ -15,10 +15,11 @@ let wandering = false;
 let wanderingInterval = null;
 let isDigging = false; // Biến để theo dõi trạng thái đào
 const BLOCK_NAME = "dirt"; // Block cần đặt và đập
-const PLACE_INTERVAL = 3000; // Thời gian giữa các lần đặt/đập (ms)
+const PLACE_INTERVAL = 4000; // Tăng thời gian giữa các lần đặt/đập để giảm tải server (ms)
 const WANDER_RANGE = 4; // Phạm vi di chuyển (block)
 const JUMP_INTERVAL_MIN = 3000; // Thời gian tối thiểu giữa các lần nhảy (ms)
 const JUMP_INTERVAL_MAX = 5000; // Thời gian tối đa giữa các lần nhảy (ms)
+const MAX_RETRIES = 2; // Số lần thử lại khi đặt block thất bại
 
 bot.once("spawn", () => {
   console.log("Bot đã vào server!");
@@ -84,19 +85,42 @@ async function startFarming() {
 
       // Tìm block tham chiếu (dưới chân bot, phía trước 1 block)
       const referenceBlock = bot.blockAt(bot.entity.position.offset(0, -1, 1));
-      if (!referenceBlock || referenceBlock.name === "air") {
-        console.log("Không tìm thấy block tham chiếu để đặt.");
+      if (!referenceBlock || referenceBlock.name === "air" || !referenceBlock.boundingBox) {
+        console.log("Block tham chiếu không hợp lệ (air hoặc không rắn).");
         return;
       }
 
-      // Đặt block
-      await bot.placeBlock(referenceBlock, new Vec3(0, 1, 0));
-      console.log(`Đã đặt block ${BLOCK_NAME}.`);
+      // Kiểm tra vị trí đặt block
+      const placePos = referenceBlock.position.plus(new Vec3(0, 1, 0));
+      const blockAtPlacePos = bot.blockAt(placePos);
+      if (blockAtPlacePos && blockAtPlacePos.name !== "air") {
+        console.log("Vị trí đặt block đã có block khác.");
+        return;
+      }
+
+      // Thử đặt block với cơ chế retry
+      let placed = false;
+      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          await bot.placeBlock(referenceBlock, new Vec3(0, 1, 0));
+          console.log(`Đã đặt block ${BLOCK_NAME} (thử ${attempt}).`);
+          placed = true;
+          break;
+        } catch (err) {
+          console.error(`Thử ${attempt} thất bại: ${err.message}`);
+          if (attempt === MAX_RETRIES) {
+            console.log("Hết số lần thử, bỏ qua đặt block.");
+            return;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 1000)); // Chờ trước khi thử lại
+        }
+      }
+
+      if (!placed) return;
 
       // Chờ và kiểm tra block vừa đặt
-      await new Promise((resolve) => setTimeout(resolve, 500)); // Đợi server cập nhật
-      const placedBlockPos = referenceBlock.position.plus(new Vec3(0, 1, 0));
-      const placedBlock = bot.blockAt(placedBlockPos);
+      await new Promise((resolve) => setTimeout(resolve, 1000)); // Tăng thời gian chờ server
+      const placedBlock = bot.blockAt(placePos);
 
       if (placedBlock && placedBlock.name === BLOCK_NAME) {
         isDigging = true; // Đánh dấu trạng thái đào
@@ -106,7 +130,7 @@ async function startFarming() {
         console.log("Không tìm thấy block vừa đặt để đập.");
       }
     } catch (err) {
-      console.error("Lỗi khi đặt/đập block:", err.message);
+      console.error("Lỗi trong quá trình đặt/đập:", err.message);
     }
   }, PLACE_INTERVAL);
 }
