@@ -2,7 +2,7 @@ const mineflayer = require("mineflayer");
 const { Vec3 } = require("vec3");
 const n = require("./new.js"); // Giữ dòng này, đảm bảo new.js tồn tại
 
-const bot = mineflayer.createBot({
+let bot = mineflayer.createBot({
   host: "lluevtyB.aternos.me",
   port: 44038,
   username: "Nhingi",
@@ -23,6 +23,9 @@ const JUMP_INTERVAL_MIN = 3000; // Thời gian tối thiểu giữa các lần n
 const JUMP_INTERVAL_MAX = 5000; // Thời gian tối đa giữa các lần nhảy (ms)
 const MAX_RETRIES = 2; // Số lần thử lại khi đặt block thất bại
 const SLEEP_RANGE = 3; // Phạm vi tìm giường (±3 block, tương đương 6x6)
+const RECONNECT_DELAY = 5000; // Độ trễ giữa các lần thử lại (ms)
+const MAX_RECONNECT_ATTEMPTS = 3; // Số lần thử kết nối lại tối đa
+let reconnectAttempts = 0; // Đếm số lần thử kết nối lại
 
 // Hàm di chuyển đến vị trí với phá block cỏ/đất cản đường
 async function moveToPosition(targetPos) {
@@ -62,9 +65,35 @@ async function moveToPosition(targetPos) {
   }
 }
 
-bot.once("spawn", () => {
-  console.log("Bot đã vào server!");
-  startWandering(); // Bắt đầu wandering ngay khi spawn
+// Hàm thử kết nối lại server
+function reconnect() {
+  if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+    console.log("Đã đạt giới hạn số lần thử kết nối lại, dừng bot.");
+    return;
+  }
+
+  reconnectAttempts++;
+  console.log(`Thử kết nối lại lần ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS} sau ${RECONNECT_DELAY/1000}s...`);
+
+  setTimeout(() => {
+    bot = mineflayer.createBot({
+      host: "lluevtyB.aternos.me",
+      port: 44038,
+      username: "Nhingi",
+      version: "1.20.1",
+      auth: "offline",
+    });
+    setupBotEvents(); // Thiết lập lại các sự kiện cho bot mới
+  }, RECONNECT_DELAY);
+}
+
+// Thiết lập các sự kiện cho bot
+function setupBotEvents() {
+  bot.once("spawn", () => {
+    console.log("Bot đã vào server!");
+    reconnectAttempts = 0; // Đặt lại số lần thử khi kết nối thành công
+    startWandering(); // Bắt đầu wandering ngay khi spawn
+  });
 
   bot.on("chat", async (username, message) => {
     if (username === bot.username) return;
@@ -117,7 +146,25 @@ bot.once("spawn", () => {
     isTryingToSleep = false;
     startWandering(); // Tiếp tục wandering sau khi thử ngủ
   });
-});
+
+  // Xử lý khi bị kick
+  bot.on("kicked", (reason) => {
+    console.log(`Bot bị kick khỏi server: ${reason}`);
+    reconnect(); // Thử kết nối lại
+  });
+
+  // Xử lý lỗi và ngắt kết nối
+  bot.on("error", (err) => console.error("Bot lỗi:", err.message));
+  bot.on("end", () => {
+    console.log("Bot đã ngắt kết nối.");
+    stopFarming();
+    stopWandering(); // Dừng tất cả hoạt động khi ngắt kết nối
+    reconnect(); // Thử kết nối lại
+  });
+}
+
+// Thiết lập sự kiện cho bot ban đầu
+setupBotEvents();
 
 // Hàm xoay bot 90 độ (ngẫu nhiên trái/phải)
 async function rotateBot() {
@@ -340,11 +387,3 @@ async function trySleep() {
     bot.chat("Lỗi khi tìm giường!");
   }
 }
-
-// Xử lý lỗi và sự kiện
-bot.on("error", (err) => console.error("Bot lỗi:", err.message));
-bot.on("end", () => {
-  console.log("Bot đã ngắt kết nối.");
-  stopFarming();
-  stopWandering(); // Dừng tất cả hoạt động khi ngắt kết nối
-});
