@@ -5,7 +5,7 @@ const n = require("./new.js"); // Giữ dòng này, đảm bảo new.js tồn t�
 let bot = mineflayer.createBot({
   host: "uyuy4174.aternos.me",
   port: 43335,
-  username: "Nhingi",
+  username: "lluevty-bot",
   version: "1.20.1",
   auth: "offline",
 });
@@ -79,7 +79,7 @@ function reconnect() {
     bot = mineflayer.createBot({
       host: "uyuy4174.aternos.me",
       port: 43335,
-      username: "Nhingi",
+      username: "lluevty-bot",
       version: "1.20.1",
       auth: "offline",
     });
