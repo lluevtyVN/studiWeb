@@ -196,13 +196,20 @@ async function startFarming() {
 
     try {
       // Tìm item trong inventory
+      
+      await new Promise((resolve) => setTimeout(resolve, 100));
       const item = bot.inventory.items().find((i) => i.name === BLOCK_NAME);
-      // await new Promise((resolve) => setTimeout(resolve, 100));
+      
       if (!item) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
         bot.chat(`Không có block "${BLOCK_NAME}" trong inventory.`);
-        stopFarming();
-        startWandering(); // Tiếp tục wandering nếu hết item
-        return;
+        item = bot.inventory.items().find((i) => i.name === BLOCK_NAME);
+        if (!item) {
+          bot.chat(`Không có block "${BLOCK_NAME}" trong inventory.`);
+          stopFarming();
+          startWandering(); // Tiếp tục wandering nếu hết item
+          return;
+        }
       }
 
       // Trang bị item
