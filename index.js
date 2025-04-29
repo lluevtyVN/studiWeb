@@ -197,7 +197,7 @@ async function startFarming() {
     try {
       // Tìm item trong inventory
       const item = bot.inventory.items().find((i) => i.name === BLOCK_NAME);
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      // await new Promise((resolve) => setTimeout(resolve, 100));
       if (!item) {
         bot.chat(`Không có block "${BLOCK_NAME}" trong inventory.`);
         stopFarming();
