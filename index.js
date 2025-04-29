@@ -3,8 +3,8 @@ const { Vec3 } = require("vec3");
 const n = require("./new.js"); // Giữ dòng này, đảm bảo new.js tồn tại
 
 let bot = mineflayer.createBot({
-  host: "lluevtyB.aternos.me",
-  port: 44038,
+  host: "uyuy4174.aternos.me",
+  port: 43335,
   username: "Nhingi",
   version: "1.20.1",
   auth: "offline",
