@@ -77,8 +77,8 @@ function reconnect() {
 
   setTimeout(() => {
     bot = mineflayer.createBot({
- host: "uyuy4174.aternos.me",
-  port: 43335,
+      host: "uyuy4174.aternos.me",
+      port: 43335,
       username: "Nhingi",
       version: "1.20.1",
       auth: "offline",
@@ -229,22 +229,22 @@ async function startFarming() {
       let placed = false;
       for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
         try {
-        await bot.placeBlock(referenceBlock, new Vec3(0, 1, 0));
-        console.log(`Đã đặt block ${BLOCK_NAME} (thử ${attempt}).`);
-        placed = true;
-        break;
+          await bot.placeBlock(referenceBlock, new Vec3(0, 1, 0));
+          console.log(`Đã đặt block ${BLOCK_NAME} (thử ${attempt}).`);
+          placed = true;
+          break;
         } catch (err) {
-        console.error(`Thử ${attempt} thất bại: ${err.message}`);
-        if (attempt === MAX_RETRIES) {
+          console.error(`Thử ${attempt} thất bại: ${err.message}`);
+          if (attempt === MAX_RETRIES) {
             console.log("Hết số lần thử, xoay bot để thử hướng mới.");
             await rotateBot(); // Xoay bot nếu hết số lần thử
             return;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 1000)); // Chờ trước khi thử lại
         }
-        await new Promise((resolve) => setTimeout(resolve, 1000)); // Chờ trước khi thử lại
-        }
-    }
+      }
 
-    if (!placed) return;
+      if (!placed) return;
 
       // Chờ và kiểm tra block vừa đặt
       await new Promise((resolve) => setTimeout(resolve, 1500)); // Tăng thời gian chờ server
@@ -276,18 +276,29 @@ function stopFarming() {
 
 // Hàm bắt đầu di chuyển và nhảy vòng vòng
 function startWandering() {
-  if (wandering || farming || isTryingToSleep) return; // Không chạy nếu đang wandering, farming, hoặc tìm giường	// Kiểm tra block phía trên (phải là air để di chuyển)
+  if (wandering || farming || isTryingToSleep) return; // Không chạy nếu đang wandering, farming, hoặc tìm giường
+  wandering = true;
+
+  wanderingInterval = setInterval(async () => { // Mark the callback as async
+    try {
+      // Tính vị trí mới ngẫu nhiên trong phạm vi WANDER_RANGE
+      const currentPos = bot.entity.position.floored();
+      const offsetX = Math.floor(Math.random() * (WANDER_RANGE * 2 + 1)) - WANDER_RANGE;
+      const offsetZ = Math.floor(Math.random() * (WANDER_RANGE * 2 + 1)) - WANDER_RANGE;
+      const newPos = currentPos.offset(offsetX, 0, offsetZ);
+
+      // Kiểm tra block phía trên (phải là air để di chuyển)
       const blockAtNewPos = bot.blockAt(newPos);
       const blockAbove = bot.blockAt(newPos.offset(0, 1, 0));
       if (blockAtNewPos.name !== "air" || blockAbove.name !== "air") {
         console.log("Đường bị chặn, xoay bot.");
-        await rotateBot(); // Xoay bot nếu đường bị chặn
+        await rotateBot(); // Now valid because the callback is async
         return;
       }
 
       // Di chuyển
       bot.setControlState("forward", true);
-      bot.lookAt(newPos.offset(0, 1.6, 0)); // Nhìn về vị trí mới
+      await bot.lookAt(newPos.offset(0, 1.6, 0)); // Nhìn về vị trí mới
       await new Promise((resolve) => setTimeout(resolve, 500)); // Di chuyển trong 0.5s
       bot.setControlState("forward", false);
 
@@ -300,7 +311,7 @@ function startWandering() {
       }
     } catch (err) {
       console.error("Lỗi khi wandering:", err.message);
-      await rotateBot(); // Xoay bot nếu gặp lỗi
+      await rotateBot(); // Now valid because the callback is async
     }
   }, Math.floor(Math.random() * (JUMP_INTERVAL_MAX - JUMP_INTERVAL_MIN) + JUMP_INTERVAL_MIN));
 }
